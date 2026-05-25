@@ -651,6 +651,66 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1326447843}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &614763236
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 614763238}
+  - component: {fileID: 614763237}
+  m_Layer: 0
+  m_Name: OceanWaveManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &614763237
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 614763236}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe31fd638cff8c9a58a6152cc55e2732, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  waveA:
+    direction: {x: 1, y: 0}
+    steepness: 0.5
+    wavelength: 10
+  waveB:
+    direction: {x: 0, y: 1}
+    steepness: 0.25
+    wavelength: 20
+  waveC:
+    direction: {x: 1, y: 1}
+    steepness: 0.15
+    wavelength: 30
+  waveSpeed: 1
+  stormIntensity: 1
+  calmZoneBlend: 0
+  oceanMaterial: {fileID: 2100000, guid: d5ed297917873582488d07992adbb63f, type: 2}
+--- !u!4 &614763238
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 614763236}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 18.848473, y: 5.410309, z: 22.78375}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &626338962
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -853,76 +913,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1326447843}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &821938443
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 821938445}
-  - component: {fileID: 821938444}
-  m_Layer: 0
-  m_Name: WaveManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &821938444
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 821938443}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe31fd638cff8c9a58a6152cc55e2732, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  waves:
-  - amplitude: 0.6
-    k: 0
-    speed: 1.2
-    dir: {x: 0, y: 0}
-    phase: 0
-  - amplitude: 0.3
-    k: 0
-    speed: 1.8
-    dir: {x: 0, y: 0}
-    phase: 0
-  - amplitude: 0.15
-    k: 0
-    speed: 2.4
-    dir: {x: 0, y: 0}
-    phase: 0
-  seed: 42
-  numWaves: 16
-  baseAmplitude: 0.5
-  baseWavelength: 20
-  baseSpeed: 1.5
-  persistence: 0.6
-  lacunarity: 1.6
-  windDirection: {x: 1, y: 0.5}
-  spread: 0.85
-  steepness: 0.4
---- !u!4 &821938445
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 821938443}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &915855624
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1039,7 +1029,6 @@ MonoBehaviour:
   waterMaterial: {fileID: 2100000, guid: d5ed297917873582488d07992adbb63f, type: 2}
   chunkSize: 40
   viewRadius: 2
-  resolution: 20
 --- !u!4 &1040098333
 Transform:
   m_ObjectHideFlags: 0
@@ -1881,7 +1870,7 @@ SceneRoots:
   m_Roots:
   - {fileID: 410087041}
   - {fileID: 1040098333}
-  - {fileID: 821938445}
+  - {fileID: 614763238}
   - {fileID: 1627193742}
   - {fileID: 70399728}
   - {fileID: 1418381919}

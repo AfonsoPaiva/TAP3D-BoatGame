@@ -1,45 +1,81 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+/// <summary>
+/// Physics-based boat controller.
+/// Queries OceanWaveManager for the CPU-side Gerstner surface height so that
+/// buoyancy and alignment match the GPU vertex displacement exactly.
+/// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class BoatController : MonoBehaviour
 {
+    // -----------------------------------------------------------------------
+    // Inspector
+    // -----------------------------------------------------------------------
     [Header("Movement")]
     public float forwardSpeed  = 10f;
     public float reverseSpeed  = 5f;
     public float turnSpeed     = 2f;
 
     [Header("Water Following")]
-    [Tooltip("Height offset above the wave surface")]
-    public float heightOffset   = 0f;
-    [Tooltip("How smoothly the boat tracks the wave height (higher = snappier)")]
-    public float heightSmooth   = 6f;
-    [Tooltip("How smoothly the boat tilts with the wave normal")]
-    public float tiltSmooth     = 4f;
-    [Tooltip("Distance from centre to bow/stern probe points (use ~half the boat length)")]
-    public float bowSternProbe  = 3f;
-    [Tooltip("Distance from centre to port/starboard probe points (use ~half the beam)")]
-    public float beamProbe      = 1.5f;
+    [Tooltip("Height offset above the wave surface. Negative = partially submerged.")]
+    public float heightOffset  = 0f;
+    [Tooltip("How quickly the boat snaps to the wave height. 25 = very responsive.")]
+    public float heightSmooth  = 25f;
+    [Tooltip("How smoothly the boat tilts with the wave normal.")]
+    public float tiltSmooth    = 8f;
+    [Tooltip("Distance from centre to bow/stern probe points (~half boat length).")]
+    public float bowSternProbe = 3f;
+    [Tooltip("Distance from centre to port/starboard probe points (~half beam).")]
+    public float beamProbe     = 1.5f;
 
     [Header("Hull Waterline Points")]
     [Tooltip("Exactly 3 child Transforms placed on the hull at the desired waterline. " +
              "The water surface will never rise above any of these points.")]
     public Transform[] hullPoints = new Transform[3];
 
-    private Rigidbody rb;
+    // -----------------------------------------------------------------------
+    // Private
+    // -----------------------------------------------------------------------
+    private Rigidbody        _rb;
+    private OceanWaveManager _ocean;   // cached reference — set in Start()
 
+    // -----------------------------------------------------------------------
+    // Unity lifecycle
+    // -----------------------------------------------------------------------
     void Awake()
     {
-        rb = GetComponent<Rigidbody>();
-        rb.useGravity      = false;
-        rb.constraints     = RigidbodyConstraints.None;
-        rb.linearDamping   = 1.5f;
-        rb.angularDamping  = 3f;
+        _rb = GetComponent<Rigidbody>();
+        _rb.useGravity     = false;
+        _rb.constraints    = RigidbodyConstraints.None;
+        _rb.linearDamping  = 1.5f;
+        _rb.angularDamping = 3f;
+    }
+
+    void Start()
+    {
+        // Try singleton first, then scene search, then log a clear error.
+        _ocean = OceanWaveManager.Instance
+              ?? FindFirstObjectByType<OceanWaveManager>();
+
+        if (_ocean == null)
+            Debug.LogError(
+                "[BoatController] No OceanWaveManager found in the scene! "
+              + "Create an Ocean GameObject, add MeshRenderer + OceanWaveManager, "
+              + "and assign the Ocean material.", this);
     }
 
     void FixedUpdate()
     {
-        // ── 1. Input ────────────────────────────────────────────────
+        HandleInput();
+        FollowWaveSurface();
+    }
+
+    // -----------------------------------------------------------------------
+    // Input + propulsion
+    // -----------------------------------------------------------------------
+    void HandleInput()
+    {
         var kb = Keyboard.current;
         float fwd  = 0f;
         float turn = 0f;
@@ -52,98 +88,116 @@ public class BoatController : MonoBehaviour
             if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  turn = -1f;
         }
 
-        // ── 2. Propulsion ───────────────────────────────────────────
-        // transform.forward is the model's bow direction
         float speed = fwd > 0 ? forwardSpeed : reverseSpeed;
-        rb.AddForce(transform.forward * fwd * speed, ForceMode.Acceleration);
+        _rb.AddForce(transform.forward * fwd * speed, ForceMode.Acceleration);
 
-        // ── 3. Steering ─────────────────────────────────────────────
         float dirMult = fwd < 0 ? -1f : 1f;
-        rb.AddTorque(transform.up * turn * turnSpeed * dirMult, ForceMode.Acceleration);
+        _rb.AddTorque(transform.up * turn * turnSpeed * dirMult, ForceMode.Acceleration);
 
-        // ── 3b. Pitch damping (prevent nose-down when moving forward) ──
-        // Cancel angular velocity on the local X axis (pitch)
-        Vector3 localAngVel = transform.InverseTransformDirection(rb.angularVelocity);
-        localAngVel.x = 0f;   // zero out pitch
-        rb.angularVelocity = transform.TransformDirection(localAngVel);
+        // Pitch damping — cancel local-X angular velocity to prevent nose-diving
+        Vector3 localAngVel = transform.InverseTransformDirection(_rb.angularVelocity);
+        localAngVel.x = 0f;
+        _rb.angularVelocity = transform.TransformDirection(localAngVel);
 
-        // ── 4. Lateral drag (prevent ice-skating) ───────────────────
-        Vector3 sideDir     = transform.right;   // beam axis (port/starboard)
-        float   sideVel     = Vector3.Dot(rb.linearVelocity, sideDir);
-        rb.AddForce(-sideDir * sideVel * 5f, ForceMode.Acceleration);
+        // Lateral drag — prevent ice-skating sideways
+        float sideVel = Vector3.Dot(_rb.linearVelocity, transform.right);
+        _rb.AddForce(-transform.right * sideVel * 5f, ForceMode.Acceleration);
+    }
 
-        // ── 5. Wave following (multi-point for long boats) ─────────────
-        if (WaveManager.Instance == null) return;
+    // -----------------------------------------------------------------------
+    // Wave surface following
+    // -----------------------------------------------------------------------
+    void FollowWaveSurface()
+    {
+        if (_ocean == null) return;
 
-        Vector3 pos = rb.position;
+        Vector3 pos = _rb.position;
 
-        // Boat axes: transform.forward = bow, transform.right = starboard
-        Vector3 bowDir   = transform.forward;
-        Vector3 sideDir2 = transform.right;
+        // ── Sample wave height at 5 points (centre + bow/stern/port/starboard) ──
+        Vector3 bowPos    = pos + transform.forward *  bowSternProbe;
+        Vector3 sternPos  = pos + transform.forward * -bowSternProbe;
+        Vector3 portPos   = pos - transform.right   *  beamProbe;
+        Vector3 starboard = pos + transform.right   *  beamProbe;
 
-        // Sample the wave at 4 points: bow, stern, port, starboard
-        Vector3 bowPos   = pos + bowDir   *  bowSternProbe;
-        Vector3 sternPos = pos + bowDir   * -bowSternProbe;
-        Vector3 portPos  = pos + sideDir2 * -beamProbe;
-        Vector3 starboard= pos + sideDir2 *  beamProbe;
+        float centreY    = _ocean.GetWaveHeight(pos);
+        float bowY       = _ocean.GetWaveHeight(bowPos);
+        float sternY     = _ocean.GetWaveHeight(sternPos);
+        float portY      = _ocean.GetWaveHeight(portPos);
+        float starboardY = _ocean.GetWaveHeight(starboard);
 
-        float centreY    = WaveManager.Instance.GetWaveHeight(pos);
-        float bowY       = WaveManager.Instance.GetWaveHeight(bowPos);
-        float sternY     = WaveManager.Instance.GetWaveHeight(sternPos);
-        float portY      = WaveManager.Instance.GetWaveHeight(portPos);
-        float starboardY = WaveManager.Instance.GetWaveHeight(starboard);
-
-        // Average height from all 5 samples (centre + 4 corners)
         float avgY = (centreY + bowY + sternY + portY + starboardY) / 5f;
 
-        // Build wave normal from bow/stern/port/starboard world-space points
-        Vector3 pBow  = new Vector3(bowPos.x,   bowY,       bowPos.z);
-        Vector3 pStern= new Vector3(sternPos.x,  sternY,    sternPos.z);
-        Vector3 pPort = new Vector3(portPos.x,   portY,     portPos.z);
-        Vector3 pStar = new Vector3(starboard.x, starboardY,starboard.z);
+        // ── Build wave surface normal from the 4 probe world positions ──────
+        Vector3 pBow   = new(bowPos.x,    bowY,        bowPos.z);
+        Vector3 pStern = new(sternPos.x,  sternY,      sternPos.z);
+        Vector3 pPort  = new(portPos.x,   portY,       portPos.z);
+        Vector3 pStar  = new(starboard.x, starboardY,  starboard.z);
 
-        // Bow-to-stern vector and port-to-starboard vector define the surface plane
-        Vector3 longAxis = (pBow   - pStern).normalized;
-        Vector3 sideAxis = (pStar  - pPort ).normalized;
+        Vector3 longAxis   = (pBow   - pStern).normalized;
+        Vector3 sideAxis   = (pStar  - pPort ).normalized;
         Vector3 waveNormal = Vector3.Cross(sideAxis, longAxis).normalized;
         if (waveNormal.y < 0) waveNormal = -waveNormal;
 
-        // Smooth Y position towards average wave surface
+        // ── Target Y (averaged wave surface + offset) ─────────────────────
         float targetY = avgY + heightOffset;
 
-        // ── 6. Hull waterline constraint ─────────────────────────────
-        // For each hull point, compute the minimum boat-pivot Y that would
-        // keep that hull point exactly at the wave surface (never below).
-        // We take the highest such requirement across all points as the floor.
+        // ── Hull waterline constraint ─────────────────────────────────────
+        // For each hull probe: find the minimum pivot Y that keeps it AT or
+        // above the wave surface. Only raises the floor — never the ceiling.
+        // NOTE: only add hullPoints if they mark the actual waterline of the
+        // mesh; leave the array empty to skip this constraint entirely.
         foreach (Transform hp in hullPoints)
         {
             if (hp == null) continue;
-
-            // World-space wave height at this hull point's XZ position
-            float waveAtPoint = WaveManager.Instance.GetWaveHeight(hp.position);
-
-            // Current vertical offset of this hull point relative to the pivot.
-            // Moving the pivot up/down by ΔY moves the hull point by the same ΔY.
-            float hullOffsetY = hp.position.y - pos.y;
-
-            // Minimum pivot Y so the hull point is AT the water surface (not below)
-            float minPivotY = waveAtPoint - hullOffsetY;
-
-            targetY = Mathf.Max(targetY, minPivotY);
+            // Use world XZ of the hull point but sample independently
+            float waveAtHP  = _ocean.GetWaveHeight(hp.position.x, hp.position.z);
+            // Local Y offset of this hull point relative to the pivot (fixed in local space)
+            float localOffY = transform.InverseTransformPoint(hp.position).y;
+            // Minimum world Y for the pivot so localOffY ends up AT the surface
+            float minPivot  = waveAtHP - localOffY;
+            if (minPivot > targetY) targetY = minPivot;
         }
 
+        // ── Smooth Y ─────────────────────────────────────────────────────
         float smoothedY = Mathf.Lerp(pos.y, targetY, Time.fixedDeltaTime * heightSmooth);
 
-        // Use rb.position (not cached pos) so XZ movement from AddForce is preserved.
-        // We only override Y — the boat moves freely on the horizontal plane.
-        Vector3 currentPos = rb.position;
-        rb.MovePosition(new Vector3(currentPos.x, smoothedY, currentPos.z));
+        Vector3 currentPos = _rb.position;
+        _rb.MovePosition(new Vector3(currentPos.x, smoothedY, currentPos.z));
 
-        // Zero out vertical velocity so physics doesn't fight the smoothing
-        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+        // Kill vertical velocity so physics doesn't fight the smoothing
+        _rb.linearVelocity = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z);
 
-        // Smooth tilt to align with wave normal
-        Quaternion targetRot = Quaternion.FromToRotation(transform.up, waveNormal) * rb.rotation;
-        rb.MoveRotation(Quaternion.Slerp(rb.rotation, targetRot, Time.fixedDeltaTime * tiltSmooth));
+        // ── Smooth tilt to align with wave normal ─────────────────────────
+        Quaternion targetRot = Quaternion.FromToRotation(transform.up, waveNormal) * _rb.rotation;
+        _rb.MoveRotation(Quaternion.Slerp(_rb.rotation, targetRot, Time.fixedDeltaTime * tiltSmooth));
     }
+
+    // -----------------------------------------------------------------------
+    // Public helpers
+    // -----------------------------------------------------------------------
+
+    /// <summary>Horizontal speed in m/s.</summary>
+    public float HorizontalSpeed
+        => new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z).magnitude;
+
+    /// <summary>Externally trigger a wave-impact impulse (explosion, large wake, etc.).</summary>
+    public void ApplyWaveImpact(Vector3 worldPoint, float forceMagnitude)
+        => _rb.AddForceAtPosition(Vector3.up * forceMagnitude, worldPoint, ForceMode.Impulse);
+
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.cyan;
+        if (hullPoints != null)
+            foreach (var hp in hullPoints)
+                if (hp != null) Gizmos.DrawWireSphere(hp.position, 0.15f);
+
+        Gizmos.color = Color.yellow;
+        Vector3 p = transform.position;
+        Gizmos.DrawWireSphere(p + transform.forward  *  bowSternProbe, 0.15f);
+        Gizmos.DrawWireSphere(p + transform.forward  * -bowSternProbe, 0.15f);
+        Gizmos.DrawWireSphere(p - transform.right    *  beamProbe,     0.15f);
+        Gizmos.DrawWireSphere(p + transform.right    *  beamProbe,     0.15f);
+    }
+#endif
 }

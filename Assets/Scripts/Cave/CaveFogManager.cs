@@ -59,7 +59,7 @@ public class CaveFogManager : MonoBehaviour
     void Start()
     {
         if (caveZone == null)
-            caveZone = FindObjectOfType<CaveZoneTrigger>();
+            caveZone = FindFirstObjectByType<CaveZoneTrigger>();
 
         if (caveZone != null)
             caveBox = caveZone.GetComponent<BoxCollider>();
