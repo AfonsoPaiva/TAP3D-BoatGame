@@ -18,10 +18,6 @@ public class BoatController : MonoBehaviour
     public float turnSpeed     = 2f;
 
     [Header("Water Following")]
-    [Tooltip("Height offset above the wave surface. Negative = partially submerged.")]
-    public float heightOffset  = 0f;
-    [Tooltip("How quickly the boat snaps to the wave height. 25 = very responsive.")]
-    public float heightSmooth  = 25f;
     [Tooltip("How smoothly the boat tilts with the wave normal.")]
     public float tiltSmooth    = 8f;
     [Tooltip("Distance from centre to bow/stern probe points (~half boat length).")]
@@ -138,8 +134,8 @@ public class BoatController : MonoBehaviour
         Vector3 waveNormal = Vector3.Cross(sideAxis, longAxis).normalized;
         if (waveNormal.y < 0) waveNormal = -waveNormal;
 
-        // ── Target Y (averaged wave surface + offset) ─────────────────────
-        float targetY = avgY + heightOffset;
+        // ── Target Y (averaged wave surface) ──────────────────────────────
+        float targetY = avgY;
 
         // ── Hull waterline constraint ─────────────────────────────────────
         // For each hull probe: find the minimum pivot Y that keeps it AT or
@@ -151,18 +147,16 @@ public class BoatController : MonoBehaviour
             if (hp == null) continue;
             // Use world XZ of the hull point but sample independently
             float waveAtHP  = _ocean.GetWaveHeight(hp.position.x, hp.position.z);
-            // Local Y offset of this hull point relative to the pivot (fixed in local space)
-            float localOffY = transform.InverseTransformPoint(hp.position).y;
-            // Minimum world Y for the pivot so localOffY ends up AT the surface
-            float minPivot  = waveAtHP - localOffY;
+            // World Y offset of this hull point relative to the pivot (accounts for scale and rotation)
+            float worldOffY = hp.position.y - pos.y;
+            // Minimum world Y for the pivot so the hull point ends up AT the surface
+            float minPivot  = waveAtHP - worldOffY;
             if (minPivot > targetY) targetY = minPivot;
         }
 
-        // ── Smooth Y ─────────────────────────────────────────────────────
-        float smoothedY = Mathf.Lerp(pos.y, targetY, Time.fixedDeltaTime * heightSmooth);
-
+        // ── Position Y ───────────────────────────────────────────────────
         Vector3 currentPos = _rb.position;
-        _rb.MovePosition(new Vector3(currentPos.x, smoothedY, currentPos.z));
+        _rb.MovePosition(new Vector3(currentPos.x, targetY, currentPos.z));
 
         // Kill vertical velocity so physics doesn't fight the smoothing
         _rb.linearVelocity = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z);

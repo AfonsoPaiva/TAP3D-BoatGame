@@ -14,10 +14,10 @@ Shader "Custom/RadarShader"
         _RingColor      ("Ring Color",         Color) = (0.0,  0.80, 0.15, 1)
         _SweepColor     ("Sweep Color",        Color) = (0.0,  1.0,  0.25, 1)
         _BlipColor      ("Blip Color",         Color) = (1.0,  1.0,  0.2,  1)
-        _BuoyColor      ("Buoy Blip Color",    Color) = (1.0,  0.5,  0.0,  1)
+        _BuoyColor      ("Buoy Blip Color",    Color) = (1.0,  0.2,  0.15, 1)
         _BorderColor    ("Border Color",       Color) = (0.0,  0.55, 0.10, 1)
         _Scanline       ("Scanline Intensity", Float) = 0.05
-        _BlipBlinkHz    ("Buoy Blink Speed (Hz)", Float) = 6.0
+        _RadarSilhouetteAtlas ("Silhouette Atlas", 2D) = "black" {}
 
         // Post-Processing Settings
         _RadarSize      ("Radar Size (relative to height)", Float) = 0.22
@@ -66,7 +66,10 @@ Shader "Custom/RadarShader"
             fixed4 _BuoyColor;
             fixed4 _BorderColor;
             float  _Scanline;
-            float  _BlipBlinkHz;
+
+            sampler2D _RadarSilhouetteAtlas;
+            float4    _BuoyAtlasRects[16];   // xy = UV origin, zw = UV size
+            float     _BuoyBlipSizes[16];    // radar-space half-size per blip
 
             float  _RadarSize;
             float  _RadarMargin;
@@ -171,9 +174,7 @@ Shader "Custom/RadarShader"
                 float scan = sin(radarUV.y * 200.0 * PI);
                 col.rgb -= _Scanline * (0.5 + 0.5 * scan);
 
-                // ── buoy blips (sweep-triggered, fade + blink) ──────────────
-                float buoyBlipSize = 0.028;
-                float buoyGlowSize = 0.055;
+                // ── buoy blips (sweep-triggered, atlas silhouettes) ────────
                 [loop]
                 for (int b = 0; b < _BuoyCount; b++)
                 {
@@ -190,26 +191,39 @@ Shader "Custom/RadarShader"
                     // How far the sweep has rotated past this buoy's angle
                     float sweepAge = fmod(sweepAngle - buoyAngle + TWO_PI, TWO_PI);
 
-                    // Exponential fade
-                    float fade = exp(-sweepAge * 2.2);
-
-                    // Blink at the user-defined frequency
-                    float blink = saturate(0.35 + 0.65 * sin(_Time.y * _BlipBlinkHz * TWO_PI));
-
-                    float intensity = fade * blink;
+                    // Pure sweep-distance fade (no blinking)
+                    float intensity = exp(-sweepAge * 2.2);
 
                     if (intensity < 0.008) continue;
 
-                    // ── draw the blip ─────────────────────────────────────────
-                    float2 buoyDelta = radarUV - buoyUV;
-                    float  buoyDist  = length(buoyDelta) / buoyBlipSize;
-                    float  buoyGlow  = length(buoyDelta) / buoyGlowSize;
+                    // ── sample silhouette atlas ───────────────────────────────
+                    float blipHalfSize = _BuoyBlipSizes[b];
+                    float2 buoyDelta   = radarUV - buoyUV;
 
-                    float buoyCore = (1.0 - smoothstep(0.8, 1.0, buoyDist)) * intensity;
-                    float buoyHalo = (1.0 - smoothstep(0.6, 1.0, buoyGlow)) * 0.5 * intensity;
+                    // Skip if outside this blip's bounding area (with margin)
+                    if (abs(buoyDelta.x) > blipHalfSize || abs(buoyDelta.y) > blipHalfSize)
+                        continue;
 
-                    col = lerp(col, _BuoyColor,       buoyHalo);
-                    col = lerp(col, _BuoyColor * 2.5, buoyCore);
+                    // Map fragment position to 0..1 within the blip's tile
+                    float2 localUV = buoyDelta / (blipHalfSize * 2.0) + float2(0.5, 0.5);
+
+                    // Map local UV to atlas tile UV
+                    float4 atlasRect = _BuoyAtlasRects[b];
+                    float2 atlasUV   = atlasRect.xy + localUV * atlasRect.zw;
+
+                    // Sample the silhouette (white on black)
+                    // tex2Dlod required — tex2D has undefined derivatives inside dynamic branches
+                    float silhouette = tex2Dlod(_RadarSilhouetteAtlas, float4(atlasUV, 0, 0)).r;
+
+                    // Outer glow around the silhouette shape
+                    float distToEdge = length(buoyDelta) / blipHalfSize;
+                    float halo = (1.0 - smoothstep(0.5, 1.0, distToEdge)) * 0.4 * intensity;
+
+                    // Core silhouette
+                    float core = silhouette * intensity;
+
+                    col = lerp(col, _BuoyColor,       halo);
+                    col = lerp(col, _BuoyColor * 2.0, core);
                 }
 
                 // ── boat blip at centre ─────────────────────────────────────

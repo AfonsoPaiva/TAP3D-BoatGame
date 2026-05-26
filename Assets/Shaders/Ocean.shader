@@ -14,8 +14,8 @@ Shader "Custom/Ocean"
         _HorizonColor ("Horizon Color", Color) = (0.7, 0.88, 1.0, 1.0)
 
         _FoamColor     ("Foam Color",     Color)         = (1, 1, 1, 1)
-        _FoamThreshold ("Foam Threshold", Range(0, 2))   = 0.4
-        _FoamSoftness  ("Foam Softness",  Range(0.01,1)) = 0.2
+        _FoamThreshold ("Foam Threshold", Range(0, 1))   = 0.75
+        _FoamSoftness  ("Foam Softness",  Range(0.01, 0.5)) = 0.1
 
         _Smoothness   ("Smoothness",    Range(0,1))   = 0.92
         _Metallic     ("Metallic",      Range(0,1))   = 0.0
@@ -27,6 +27,10 @@ Shader "Custom/Ocean"
 
         _WakeStrength ("Wake Strength", Range(0,1)) = 0.6
         _WakeLength   ("Wake Length",   Float)      = 40.0
+
+        _NoiseScale    ("Noise Scale",    Float) = 0.03
+        _NoiseAmplitude("Noise Amplitude",Float) = 0.3
+        _NoiseSpeed    ("Noise Speed",    Float) = 0.2
     }
 
     SubShader
@@ -34,6 +38,14 @@ Shader "Custom/Ocean"
         Tags { "RenderType"="Transparent" "Queue"="Transparent" }
         Blend SrcAlpha OneMinusSrcAlpha
         ZWrite Off
+
+        // Stencil Buffer: Não desenha água onde a máscara do barco escreveu o ID 3
+        Stencil
+        {
+            Ref 3
+            Comp NotEqual
+            Pass Keep
+        }
 
         CGPROGRAM
         #pragma surface surf Standard vertex:vert alpha:fade
@@ -60,7 +72,50 @@ Shader "Custom/Ocean"
         float     _BoatSpeed;
         float4    _BoatPosition, _BoatForward;
 
+        float     _NoiseScale;
+        float     _NoiseAmplitude;
+        float     _NoiseSpeed;
+
         sampler2D _CameraDepthTexture;
+
+        // ── Perlin noise with derivatives ────────────────────────────────────
+        float2 hash2(float2 p)
+        {
+            p = float2(dot(p, float2(127.1, 311.7)), dot(p, float2(269.5, 183.3)));
+            return -1.0 + 2.0 * frac(sin(p) * 43758.5453123);
+        }
+
+        // Returns float3(noise_value, dNoise_dx, dNoise_dy)
+        float3 perlinNoiseDeriv(float2 p)
+        {
+            float2 i = floor(p);
+            float2 f = frac(p);
+            
+            // Quintic interpolation
+            float2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+            float2 du = 30.0 * f * f * (f - 1.0) * (f - 1.0);
+            
+            float2 ga = hash2(i + float2(0.0, 0.0));
+            float2 gb = hash2(i + float2(1.0, 0.0));
+            float2 gc = hash2(i + float2(0.0, 1.0));
+            float2 gd = hash2(i + float2(1.0, 1.0));
+            
+            float va = dot(ga, f - float2(0.0, 0.0));
+            float vb = dot(gb, f - float2(1.0, 0.0));
+            float vc = dot(gc, f - float2(0.0, 1.0));
+            float vd = dot(gd, f - float2(1.0, 1.0));
+            
+            float A = lerp(va, vb, u.x);
+            float B = lerp(vc, vd, u.x);
+            
+            float val = lerp(A, B, u.y);
+            
+            // Derivatives
+            float dx = lerp(lerp(ga.x, gb.x, u.x), lerp(gc.x, gd.x, u.x), u.y) + du.x * lerp(vb - va, vd - vc, u.y);
+            float dy = lerp(lerp(ga.y, gb.y, u.x), lerp(gc.y, gd.y, u.x), u.y) + du.y * (B - A);
+            
+            return float3(val, dx, dy);
+        }
 
         // ── Gerstner wave ─────────────────────────────────────────────────────
         //  wave.xy = direction, wave.z = steepness Q, wave.w = wavelength
@@ -109,6 +164,7 @@ Shader "Custom/Ocean"
             float4 screenPos;
             float2 uv_NormalTex;
             float3 viewDir;
+            float  waveHeight;
         };
 
         // ── Boat displacement wave/ripple effect ──────────────────────────────
@@ -136,9 +192,18 @@ Shader "Custom/Ocean"
             return (bowWave + vWake + sternDep) * _BoatSpeed;
         }
 
-        // ── Vertex overload 1 — displacement only (ForwardAdd/Meta/Shadow) ────
-        void vert(inout appdata_full v)
+        float GetWaveAmplitude(float4 wave)
         {
+            float steepness = wave.z;
+            float wavelength = wave.w;
+            if (wavelength <= 0.0) return 0.0;
+            return (steepness * wavelength) / (2.0 * 3.14159265);
+        }
+
+        void vert(inout appdata_full v, out Input o)
+        {
+            UNITY_INITIALIZE_OUTPUT(Input, o);
+
             float3 wPos    = mul(unity_ObjectToWorld, v.vertex).xyz;
             float3 tangent = float3(1, 0, 0);
             float3 binormal= float3(0, 0, 1);
@@ -147,22 +212,35 @@ Shader "Custom/Ocean"
                    disp += GerstnerWave(_WaveB, wPos, tangent, binormal);
                    disp += GerstnerWave(_WaveC, wPos, tangent, binormal);
 
+            // Increment Perlin noise for asymmetry
+            float2 noiseCoord = v.vertex.xz * _NoiseScale + float2(_Time.y * _NoiseSpeed, _Time.y * _NoiseSpeed * 0.7);
+            float3 noiseVal = perlinNoiseDeriv(noiseCoord);
+            
+            disp.y += noiseVal.x * _NoiseAmplitude;
+            tangent.y += noiseVal.y * _NoiseAmplitude * _NoiseScale;
+            binormal.y += noiseVal.z * _NoiseAmplitude * _NoiseScale;
+
             v.vertex.xyz += disp;
 
             // Apply boat-moving local displacement on top
             float3 worldPosWithWaves = mul(unity_ObjectToWorld, v.vertex).xyz;
-            v.vertex.y += CalculateBoatDisplacement(worldPosWithWaves);
+            float boatDisp = CalculateBoatDisplacement(worldPosWithWaves);
+            v.vertex.y += boatDisp;
 
             v.normal      = normalize(cross(binormal, tangent));
-        }
 
-        // ── Vertex overload 2 — full (ForwardBase, populates Input) ──────────
-        void vert(inout appdata_full v, out Input o)
-        {
-            UNITY_INITIALIZE_OUTPUT(Input, o);
-            vert(v);                                            // apply displacement
             o.screenPos = ComputeScreenPos(UnityObjectToClipPos(v.vertex));
             o.worldPos  = mul(unity_ObjectToWorld, v.vertex).xyz;
+
+            // Calculate the theoretical maximum/minimum height of the waves
+            float ampA = GetWaveAmplitude(_WaveA);
+            float ampB = GetWaveAmplitude(_WaveB);
+            float ampC = GetWaveAmplitude(_WaveC);
+            float totalAmp = ampA + ampB + ampC + _NoiseAmplitude;
+
+            float range = 2.0 * totalAmp;
+            float heightOffset = v.vertex.y; // Local Y displacement (includes waves and boat)
+            o.waveHeight = (range > 0.001) ? saturate((heightOffset + totalAmp) / range) : 0.5;
         }
 
         // ── Surface shader ────────────────────────────────────────────────────
@@ -186,10 +264,17 @@ Shader "Custom/Ocean"
             float fresnel = pow(1.0 - NdotV, _FresnelPower);
             col.rgb = lerp(col.rgb, _HorizonColor.rgb, fresnel * 0.6);
 
-            // Crest foam (world-space Y height from vertex displacement)
+            // Normalized wave height (0 = trough, 1 = crest)
+            float heightFactor = IN.waveHeight;
+
+            // Make ocean color variable to vertex height (brighter/more translucent at wave crests)
+            float crestWeight = smoothstep(0.4, 0.8, heightFactor);
+            col.rgb = lerp(col.rgb, _ShallowColor.rgb * 1.25, crestWeight * 0.45);
+
+            // Crest foam (smoothstep based on normalized wave height)
             float foam = smoothstep(_FoamThreshold - _FoamSoftness,
                                     _FoamThreshold + _FoamSoftness,
-                                    IN.worldPos.y);
+                                    heightFactor);
 
             // Boat wake
             foam = saturate(foam + KelvinWake(IN.worldPos, t) * _BoatSpeed);

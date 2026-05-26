@@ -24,7 +24,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _NormalTex:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 28cccccbf08d366d2a209888ad432edd, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _WindNoise:
@@ -38,17 +38,24 @@ Material:
     - _CausticsStrength: 0.5
     - _ContactFoamSharpness: 0.3
     - _ContactFoamWidth: 0.4
+    - _DepthFade: 8
     - _DepthMaxDist: 8
-    - _FoamSoftness: 0.659
-    - _FoamThreshold: 0.67
+    - _FoamSoftness: 0.388
+    - _FoamThreshold: 0.79
     - _FresnelBias: 0.02
     - _FresnelPower: 4
     - _Metallic: 0.281
+    - _NoiseAmplitude: 1.55
+    - _NoiseScale: 0.24
+    - _NoiseSpeed: 0.44
     - _NormalScale: 0.8
     - _NormalSpeed: 0.05
     - _NormalStrength: 2.26
     - _Smoothness: 1
     - _SubsurfaceStrength: 0.614
+    - _TessMaxDist: 80
+    - _TessMinDist: 10
+    - _Tessellation: 16
     - _WakeLength: 40
     - _WakeStrength: 0.6
     - _WaveSpeed: 1
@@ -59,9 +66,9 @@ Material:
     - _HorizonColor: {r: 0.72, g: 0.88, b: 1, a: 1}
     - _ShallowColor: {r: 0.09999997, g: 0.6, b: 0.7, a: 0.85}
     - _SubsurfaceColor: {r: 0.049999982, g: 0.39999998, b: 0.5, a: 1}
-    - _WaveA: {r: 1, g: 0, b: 0.5, a: 10}
-    - _WaveB: {r: 0, g: 1, b: 0.25, a: 20}
-    - _WaveC: {r: 1, g: 1, b: 0.15, a: 30}
+    - _WaveA: {r: 1, g: 0, b: 0.3, a: 10}
+    - _WaveB: {r: 0, g: 1, b: 0.15, a: 20}
+    - _WaveC: {r: 1, g: 1, b: 0.1, a: 30}
     - _WindDirection: {r: 1, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

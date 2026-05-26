@@ -2,12 +2,16 @@ Shader "Hidden/CaveLighting"
 {
     Properties
     {
-        _MainTex     ("Texture",       2D)            = "white" {}
-        _BoatScreenPos("Boat Screen Pos", Vector)     = (0.5, 0.5, 0, 0)
-        _Darkness    ("Darkness",      Range(0, 1))   = 0.9
-        _LightRadius ("Light Radius",  Float)         = 0.3
-        _AspectRatio ("Aspect Ratio",  Float)         = 1.77
+        _MainTex        ("Texture",          2D)           = "white" {}
+        _BoatScreenPos  ("Boat Screen Pos",  Vector)       = (0.5, 0.5, 0, 0)
+        _LightRadius    ("Light Radius",     Float)        = 0.3
+        _LightSoftness  ("Light Softness",   Float)        = 0.15
+        _AspectRatio    ("Aspect Ratio",     Float)        = 1.77
+        _EffectIntensity("Effect Intensity", Range(0,1))   = 0.0
+        _Darkness       ("Darkness",         Range(0,1))   = 0.92
+        _MinBrightness  ("Min Brightness",   Range(0,1))   = 0.08
     }
+
     SubShader
     {
         Cull Off ZWrite Off ZTest Always
@@ -33,9 +37,12 @@ Shader "Hidden/CaveLighting"
 
             sampler2D _MainTex;
             float4    _BoatScreenPos;
-            float     _Darkness;
             float     _LightRadius;
+            float     _LightSoftness;
             float     _AspectRatio;
+            float     _EffectIntensity;
+            float     _Darkness;
+            float     _MinBrightness;
 
             v2f vert (appdata v)
             {
@@ -50,20 +57,49 @@ Shader "Hidden/CaveLighting"
                 // Cor original da camara
                 fixed4 col = tex2D(_MainTex, i.uv);
 
-                // Distância do píxel ao barco (corrigida pelo aspect ratio)
+                // Sai cedo se o efeito nao esta activo
+                if (_EffectIntensity <= 0.001)
+                    return col;
+
+                // -------------------------------------------------------
+                // PASSO 1 - Escuridao ambiente uniforme em todo o ecra
+                // Escurece TODO o ecra proporcionalmente a _EffectIntensity.
+                // Nunca cria um "circulo preto" porque e aplicado de forma
+                // uniforme antes de qualquer mascara de luz.
+                // -------------------------------------------------------
+                float ambientDark = _Darkness * _EffectIntensity;
+
+                // -------------------------------------------------------
+                // PASSO 2 - Halo de luz a volta do barco
+                // Raio FIXO (_LightRadius) - so a intensidade varia com
+                // _EffectIntensity. Evita o artefacto de circulo negro
+                // a crescer a partir de zero.
+                // -------------------------------------------------------
                 float2 diff = i.uv - _BoatScreenPos.xy;
                 diff.x *= _AspectRatio;
                 float dist = length(diff);
 
-                // Máscara de luz circular suave (1 no centro, 0 na borda)
-                float lightMask = 1.0 - smoothstep(0.0, _LightRadius, dist);
-                lightMask = lightMask * lightMask; // quadrático para falloff mais natural
+                // Halo suave: 1 perto do barco, 0 fora do raio
+                float halo = 1.0 - smoothstep(_LightRadius,
+                                               _LightRadius + _LightSoftness,
+                                               dist);
+                // Curva cubica para falloff sem aresta dura
+                halo = halo * halo * (3.0 - 2.0 * halo);
+                // O halo modula com a intensidade (aparece gradualmente)
+                halo *= _EffectIntensity;
 
-                // Escuridão = _Darkness no exterior da luz, 0 no centro da luz
-                float shadow = _Darkness * (1.0 - lightMask);
+                // -------------------------------------------------------
+                // PASSO 3 - Combinar
+                // A escuridao ambiente reduz-se na zona iluminada pelo halo.
+                // _MinBrightness garante que nunca fica totalmente preto
+                // (luz ambiente minima da gruta).
+                // -------------------------------------------------------
+                float darknessApplied = ambientDark * (1.0 - halo);
 
-                // Aplica a escuridão
-                col.rgb *= (1.0 - shadow);
+                // Factor de brilho final: nunca desce abaixo de _MinBrightness
+                float brightnessFactor = max(1.0 - darknessApplied, _MinBrightness);
+
+                col.rgb *= brightnessFactor;
 
                 return col;
             }

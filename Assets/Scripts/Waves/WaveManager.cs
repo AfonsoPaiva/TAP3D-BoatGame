@@ -51,6 +51,11 @@ public class OceanWaveManager : MonoBehaviour
     [Range(0f, 2f)] public float stormIntensity = 1f;
     [Range(0f, 1f)] public float calmBlend      = 0f;
 
+    [Header("Noise Wave Parameters")]
+    public float noiseScale = 0.03f;
+    public float noiseAmplitude = 0.3f;
+    public float noiseSpeed = 0.2f;
+
     // ── Private ───────────────────────────────────────────────────────────────
 
     private Material _mat;
@@ -59,6 +64,9 @@ public class OceanWaveManager : MonoBehaviour
     private static readonly int ID_WaveB     = Shader.PropertyToID("_WaveB");
     private static readonly int ID_WaveC     = Shader.PropertyToID("_WaveC");
     private static readonly int ID_WaveSpeed = Shader.PropertyToID("_WaveSpeed");
+    private static readonly int ID_NoiseScale     = Shader.PropertyToID("_NoiseScale");
+    private static readonly int ID_NoiseAmplitude = Shader.PropertyToID("_NoiseAmplitude");
+    private static readonly int ID_NoiseSpeed     = Shader.PropertyToID("_NoiseSpeed");
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
 
@@ -100,6 +108,9 @@ public class OceanWaveManager : MonoBehaviour
         _mat.SetVector(ID_WaveB,     ToShaderVec(waveB, storm));
         _mat.SetVector(ID_WaveC,     ToShaderVec(waveC, storm));
         _mat.SetFloat (ID_WaveSpeed, waveSpeed);
+        _mat.SetFloat (ID_NoiseScale,     noiseScale);
+        _mat.SetFloat (ID_NoiseAmplitude, noiseAmplitude);
+        _mat.SetFloat (ID_NoiseSpeed,     noiseSpeed);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -110,10 +121,17 @@ public class OceanWaveManager : MonoBehaviour
         float t     = Time.time * waveSpeed;
         float storm = stormIntensity * (1f - calmBlend);
 
+        float localX = x - transform.position.x;
+        float localZ = z - transform.position.z;
+        float nx = localX * noiseScale + Time.time * noiseSpeed;
+        float nz = localZ * noiseScale + Time.time * noiseSpeed * 0.7f;
+        float noiseY = PerlinNoise(nx, nz) * noiseAmplitude;
+
         return transform.position.y
              + GerstnerY(waveA, storm, x, z, t)
              + GerstnerY(waveB, storm, x, z, t)
-             + GerstnerY(waveC, storm, x, z, t);
+             + GerstnerY(waveC, storm, x, z, t)
+             + noiseY;
     }
 
     /// <summary>Convenience overload — uses worldPos.x and worldPos.z.</summary>
@@ -153,6 +171,44 @@ public class OceanWaveManager : MonoBehaviour
         Vector2 d = w.direction.normalized;
         float f = k * (d.x * x + d.y * z - c * t);
         return (w.steepness * storm / k) * Mathf.Sin(f);
+    }
+
+    private static Vector2 Hash2(Vector2 p)
+    {
+        float x = Vector2.Dot(p, new Vector2(127.1f, 311.7f));
+        float y = Vector2.Dot(p, new Vector2(269.5f, 183.3f));
+
+        float rx = Mathf.Sin(x) * 43758.5453123f;
+        float ry = Mathf.Sin(y) * 43758.5453123f;
+
+        return new Vector2(
+            -1.0f + 2.0f * (rx - Mathf.Floor(rx)),
+            -1.0f + 2.0f * (ry - Mathf.Floor(ry))
+        );
+    }
+
+    private static float PerlinNoise(float px, float py)
+    {
+        Vector2 p = new Vector2(px, py);
+        Vector2 i = new Vector2(Mathf.Floor(px), Mathf.Floor(py));
+        Vector2 f = p - i;
+
+        Vector2 u = new Vector2(
+            f.x * f.x * f.x * (f.x * (f.x * 6.0f - 15.0f) + 10.0f),
+            f.y * f.y * f.y * (f.y * (f.y * 6.0f - 15.0f) + 10.0f)
+        );
+
+        Vector2 ga = Hash2(i + new Vector2(0f, 0f));
+        Vector2 gb = Hash2(i + new Vector2(1f, 0f));
+        Vector2 gc = Hash2(i + new Vector2(0f, 1f));
+        Vector2 gd = Hash2(i + new Vector2(1f, 1f));
+
+        float va = Vector2.Dot(ga, f - new Vector2(0f, 0f));
+        float vb = Vector2.Dot(gb, f - new Vector2(1f, 0f));
+        float vc = Vector2.Dot(gc, f - new Vector2(0f, 1f));
+        float vd = Vector2.Dot(gd, f - new Vector2(1f, 1f));
+
+        return Mathf.Lerp(Mathf.Lerp(va, vb, u.x), Mathf.Lerp(vc, vd, u.x), u.y);
     }
 
     // Builds a flat subdivided plane centred at local origin.
