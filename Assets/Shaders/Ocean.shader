@@ -31,6 +31,11 @@ Shader "Custom/Ocean"
         _NoiseScale    ("Noise Scale",    Float) = 0.03
         _NoiseAmplitude("Noise Amplitude",Float) = 0.3
         _NoiseSpeed    ("Noise Speed",    Float) = 0.2
+
+        [Header(Tessellation)]
+        _TessLevel     ("Tessellation Level",   Range(1, 64)) = 8
+        _TessMinDist   ("Tess Min Distance",    Float) = 10
+        _TessMaxDist   ("Tess Max Distance",    Float) = 80
     }
 
     SubShader
@@ -48,9 +53,24 @@ Shader "Custom/Ocean"
         }
 
         CGPROGRAM
-        #pragma surface surf Standard vertex:vert alpha:fade
-        #pragma target 3.0
+        #pragma surface surf Standard vertex:vert alpha:fade tessellate:tessDistance
+        #pragma target 4.6
         #include "UnityCG.cginc"
+        #include "Tessellation.cginc"
+
+        // ── Tessellation (Hull / Domain Shader Stage) ─────────────────────
+        //  Subdivide triangulos perto da camara para ondas Gerstner mais
+        //  suaves. Longe da camara mantem a geometria original (LOD).
+        float _TessLevel;
+        float _TessMinDist;
+        float _TessMaxDist;
+
+        float4 tessDistance(appdata_full v0, appdata_full v1, appdata_full v2)
+        {
+            return UnityDistanceBasedTess(
+                v0.vertex, v1.vertex, v2.vertex,
+                _TessMinDist, _TessMaxDist, _TessLevel);
+        }
 
         // ── Uniforms ──────────────────────────────────────────────────────────
         float4 _WaveA, _WaveB, _WaveC;
@@ -164,7 +184,7 @@ Shader "Custom/Ocean"
             float4 screenPos;
             float2 uv_NormalTex;
             float3 viewDir;
-            float  waveHeight;
+            float4 color : COLOR;  // waveHeight packed in color.r
         };
 
         // ── Boat displacement wave/ripple effect ──────────────────────────────
@@ -200,10 +220,8 @@ Shader "Custom/Ocean"
             return (steepness * wavelength) / (2.0 * 3.14159265);
         }
 
-        void vert(inout appdata_full v, out Input o)
+        void vert(inout appdata_full v)
         {
-            UNITY_INITIALIZE_OUTPUT(Input, o);
-
             float3 wPos    = mul(unity_ObjectToWorld, v.vertex).xyz;
             float3 tangent = float3(1, 0, 0);
             float3 binormal= float3(0, 0, 1);
@@ -227,20 +245,18 @@ Shader "Custom/Ocean"
             float boatDisp = CalculateBoatDisplacement(worldPosWithWaves);
             v.vertex.y += boatDisp;
 
-            v.normal      = normalize(cross(binormal, tangent));
+            v.normal = normalize(cross(binormal, tangent));
 
-            o.screenPos = ComputeScreenPos(UnityObjectToClipPos(v.vertex));
-            o.worldPos  = mul(unity_ObjectToWorld, v.vertex).xyz;
-
-            // Calculate the theoretical maximum/minimum height of the waves
+            // Pack waveHeight into vertex color (tessellation requires single-param vert)
             float ampA = GetWaveAmplitude(_WaveA);
             float ampB = GetWaveAmplitude(_WaveB);
             float ampC = GetWaveAmplitude(_WaveC);
             float totalAmp = ampA + ampB + ampC + _NoiseAmplitude;
 
             float range = 2.0 * totalAmp;
-            float heightOffset = v.vertex.y; // Local Y displacement (includes waves and boat)
-            o.waveHeight = (range > 0.001) ? saturate((heightOffset + totalAmp) / range) : 0.5;
+            float heightOffset = v.vertex.y;
+            float waveHeight = (range > 0.001) ? saturate((heightOffset + totalAmp) / range) : 0.5;
+            v.color = float4(waveHeight, waveHeight, waveHeight, 1.0);
         }
 
         // ── Surface shader ────────────────────────────────────────────────────
@@ -265,7 +281,7 @@ Shader "Custom/Ocean"
             col.rgb = lerp(col.rgb, _HorizonColor.rgb, fresnel * 0.6);
 
             // Normalized wave height (0 = trough, 1 = crest)
-            float heightFactor = IN.waveHeight;
+            float heightFactor = IN.color.r;
 
             // Make ocean color variable to vertex height (brighter/more translucent at wave crests)
             float crestWeight = smoothstep(0.4, 0.8, heightFactor);
