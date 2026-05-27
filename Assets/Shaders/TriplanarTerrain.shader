@@ -4,16 +4,15 @@ Shader "Custom/TriplanarTerrain"
     {
         [Header(Top Texture)]
         _TopTex ("Top Albedo", 2D) = "white" {}
-        _TopNormal ("Top Normal", 2D) = "bump" {}
-        
+
         [Header(Side Texture)]
         _SideTex ("Side Albedo", 2D) = "white" {}
-        _SideNormal ("Side Normal", 2D) = "bump" {}
 
         [Header(Triplanar Settings)]
         _TextureScale ("Texture Scale", Float) = 0.2
         _BlendSharpness ("Blend Sharpness", Range(1, 50)) = 10.0
-        
+        _HeightBlendStrength ("Height Blend Strength", Range(0, 1)) = 0.5
+
         [Header(PBR Settings)]
         _Smoothness ("Smoothness", Range(0, 1)) = 0.1
         _Metallic ("Metallic", Range(0, 1)) = 0.0
@@ -28,12 +27,11 @@ Shader "Custom/TriplanarTerrain"
         #pragma target 3.0
 
         sampler2D _TopTex;
-        sampler2D _TopNormal;
         sampler2D _SideTex;
-        sampler2D _SideNormal;
 
         float _TextureScale;
         float _BlendSharpness;
+        float _HeightBlendStrength;
         float _Smoothness;
         float _Metallic;
 
@@ -44,52 +42,45 @@ Shader "Custom/TriplanarTerrain"
             INTERNAL_DATA
         };
 
+        float Luminance(float3 c)
+        {
+            return dot(c, float3(0.299, 0.587, 0.114));
+        }
+
         void surf (Input IN, inout SurfaceOutputStandard o)
         {
-            // Obter a normal do mundo (baseada na geometria do modelo)
             float3 worldNormal = WorldNormalVector(IN, o.Normal);
-            
-            // Calcular os pesos de mistura (Blend Weights) com base na direção da normal
+
             float3 blendWeights = abs(worldNormal);
-
-            // Aumentar a nitidez da transição
             blendWeights = pow(blendWeights, _BlendSharpness);
-
-            // Normalizar para que a soma seja 1
             blendWeights /= (blendWeights.x + blendWeights.y + blendWeights.z);
 
-            // Escalar as coordenadas do mundo para o tamanho da textura
             float2 uvX = IN.worldPos.zy * _TextureScale;
             float2 uvY = IN.worldPos.xz * _TextureScale;
             float2 uvZ = IN.worldPos.xy * _TextureScale;
 
-            // --- ALBEDO ---
-            // Y é o topo/baixo, X e Z são as laterais
             float4 colX = tex2D(_SideTex, uvX);
-            float4 colY = tex2D(_TopTex,  uvY);
             float4 colZ = tex2D(_SideTex, uvZ);
-            
-            float4 albedo = colX * blendWeights.x + colY * blendWeights.y + colZ * blendWeights.z;
 
-            // --- NORMALS ---
-            float4 normX = tex2D(_SideNormal, uvX);
-            float4 normY = tex2D(_TopNormal,  uvY);
-            float4 normZ = tex2D(_SideNormal, uvZ);
-            
-            // Descomprimir normais
-            float3 nX = UnpackNormal(normX);
-            float3 nY = UnpackNormal(normY);
-            float3 nZ = UnpackNormal(normZ);
+            // Y axis: top face uses TopTex, bottom face uses SideTex.
+            float4 colYTop = tex2D(_TopTex,  uvY);
+            float4 colYBot = tex2D(_SideTex, uvY);
+            float topFace  = step(0.0, worldNormal.y);
+            float4 colY    = lerp(colYBot, colYTop, topFace);
 
-            // Misturar normais
-            float3 blendedNormal = nX * blendWeights.x + nY * blendWeights.y + nZ * blendWeights.z;
+            // Height-based blending via luminance to hide triplanar seams.
+            float hX = Luminance(colX.rgb);
+            float hY = Luminance(colY.rgb);
+            float hZ = Luminance(colZ.rgb);
 
-            // Atribuir valores finais
-            o.Albedo = albedo.rgb;
-            o.Normal = normalize(blendedNormal);
-            o.Metallic = _Metallic;
+            float3 w = blendWeights + float3(hX, hY, hZ) * _HeightBlendStrength;
+            w = max(w, 0.0001);
+            w /= (w.x + w.y + w.z);
+
+            o.Albedo     = (colX * w.x + colY * w.y + colZ * w.z).rgb;
+            o.Metallic   = _Metallic;
             o.Smoothness = _Smoothness;
-            o.Alpha = 1.0;
+            o.Alpha      = 1.0;
         }
         ENDCG
     }

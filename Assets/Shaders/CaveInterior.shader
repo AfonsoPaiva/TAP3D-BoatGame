@@ -3,9 +3,8 @@ Shader "Custom/CaveInterior"
     Properties
     {
         [Header(Triplanar Textures)]
-        _SideTex        ("Side Albedo",         2D)           = "white" {}
+        _BaseColor      ("Base Color",          Color)        = (0.5, 0.5, 0.5, 1)
         _SideNormal     ("Side Normal",         2D)           = "bump"  {}
-        _TopTex         ("Top / Ceil Albedo",   2D)           = "white" {}
         _TopNormal      ("Top / Ceil Normal",   2D)           = "bump"  {}
 
         [Header(Triplanar Settings)]
@@ -56,9 +55,8 @@ Shader "Custom/CaveInterior"
         #pragma surface surf Standard fullforwardshadows
         #pragma target 3.0
 
-        sampler2D _SideTex;
+        float4 _BaseColor;
         sampler2D _SideNormal;
-        sampler2D _TopTex;
         sampler2D _TopNormal;
 
         float _TextureScale;
@@ -83,10 +81,11 @@ Shader "Custom/CaveInterior"
         void surf(Input IN, inout SurfaceOutputStandard o)
         {
             // ------- Triplanar blend weights --------
+            // como a gruta tem formas irregulares isto faz com que as texturas nao fiquem esticadas
             float3 N = WorldNormalVector(IN, o.Normal);
             float3 w = abs(N);
             w = pow(max(w, 0.0001), _BlendSharpness);
-            w /= (w.x + w.y + w.z);
+            w /= (w.x + w.y + w.z);   // normaliza para que a soma seja 1
 
             // ------- UVs triplanares --------
             float2 uvX = IN.worldPos.zy * _TextureScale;
@@ -94,9 +93,7 @@ Shader "Custom/CaveInterior"
             float2 uvZ = IN.worldPos.xy * _TextureScale;
 
             // ------- Albedo --------
-            float3 albedo = tex2D(_SideTex, uvX).rgb * w.x
-                          + tex2D(_TopTex,  uvY).rgb * w.y
-                          + tex2D(_SideTex, uvZ).rgb * w.z;
+            float3 albedo = _BaseColor.rgb;
 
             // ------- Normais --------
             float3 nX = UnpackNormal(tex2D(_SideNormal, uvX));
@@ -105,6 +102,8 @@ Shader "Custom/CaveInterior"
             float3 blendedN = normalize(nX * w.x + nY * w.y + nZ * w.z);
 
             // ------- Reveal por proximidade ao barco --------
+            // para o reveal usa o _RevealIntensity do script cainterior.reveal.cs
+
             // Distancia 3D deste fragmento ao barco (espaco mundo)
             float distToBoat = distance(IN.worldPos, _BoatWorldPos.xyz);
 
@@ -112,13 +111,10 @@ Shader "Custom/CaveInterior"
             float proximity = 1.0 - smoothstep(_RevealRadius,
                                                 _RevealRadius + _RevealFalloff,
                                                 distToBoat);
-            // Curva suave extra para aspecto mais organico
             proximity = proximity * proximity * (3.0 - 2.0 * proximity);
 
-            // Modula pela intensidade global do efeito (fade-in ao entrar na gruta)
+            // fade-in ao entrar na gruta
             float t = proximity * _RevealIntensity;
-
-            // ------- Combinar textura com escuridao --------
             float3 finalAlbedo = lerp(_DarkColor.rgb, albedo, t);
 
             // ------- Output --------
