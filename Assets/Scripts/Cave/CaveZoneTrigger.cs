@@ -1,10 +1,6 @@
 using UnityEngine;
 
-/// <summary>
-/// Coloca este script num GameObject vazio dentro da gruta.
-/// Adiciona um Box Collider ao mesmo objeto (o tamanho define a zona da gruta).
-/// Nao precisa de Rigidbody no barco nem de tags especificas.
-/// </summary>
+
 public class CaveZoneTrigger : MonoBehaviour
 {
     [Tooltip("O barco / player. Se vazio, tenta encontrar por tag 'Player'.")]

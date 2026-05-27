@@ -1,27 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
-/// <summary>
-/// All-in-one ocean system.
-///
-/// Attach to any scene GameObject.  Add a MeshRenderer and assign the
-/// Ocean material — RequireComponent handles MeshFilter automatically.
-///
-/// Responsibilities:
-///   • Creates a large flat mesh and keeps it centred on the boat every frame.
-///     Because the vertex shader uses world-space XZ for wave phase, the mesh
-///     can slide freely without visible seams — waves appear infinite.
-///   • Pushes Gerstner parameters to the material so GPU and CPU stay in sync.
-///   • Exposes GetWaveHeight / GetWaveHeightAndNormal for BoatController,
-///     BuoyFloater, or any other physics script.
-///
-/// Scene setup:
-///   1. Create an empty GameObject called "Ocean".
-///   2. Add MeshRenderer, assign the Ocean material.
-///   3. Add this component.
-///   4. Assign the boat transform (or tag the boat "Player" for auto-detect).
-///   5. Delete the old WaterManager and WaveManager GameObjects.
-/// </summary>
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
 public class OceanWaveManager : MonoBehaviour
@@ -113,9 +92,7 @@ public class OceanWaveManager : MonoBehaviour
         _mat.SetFloat (ID_NoiseSpeed,     noiseSpeed);
     }
 
-    // ── Public API ────────────────────────────────────────────────────────────
-
-    /// <summary>World-space Y of the ocean surface at world XZ (x, z).</summary>
+    ///World-space Y of the ocean surface at world XZ (x, z).
     public float GetWaveHeight(float x, float z)
     {
         float t     = Time.time * waveSpeed;
@@ -134,10 +111,10 @@ public class OceanWaveManager : MonoBehaviour
              + noiseY;
     }
 
-    /// <summary>Convenience overload — uses worldPos.x and worldPos.z.</summary>
+    /// Convenience overload — uses worldPos.x and worldPos.z.
     public float GetWaveHeight(Vector3 worldPos) => GetWaveHeight(worldPos.x, worldPos.z);
 
-    /// <summary>Surface height and finite-difference normal at (x, z).</summary>
+    /// Surface height and finite-difference normal at (x, z).</summary>
     public void GetWaveHeightAndNormal(float x, float z,
                                        out float height, out Vector3 normal)
     {
@@ -148,7 +125,7 @@ public class OceanWaveManager : MonoBehaviour
         normal  = Vector3.Normalize(new Vector3(hL - hR, 2f * eps, hD - hU));
     }
 
-    /// <summary>Convenience overload accepting a Vector3.</summary>
+    /// Convenience overload accepting a Vector3.</summary>
     public void GetWaveHeightAndNormal(Vector3 p, out float height, out Vector3 normal)
         => GetWaveHeightAndNormal(p.x, p.z, out height, out normal);
 

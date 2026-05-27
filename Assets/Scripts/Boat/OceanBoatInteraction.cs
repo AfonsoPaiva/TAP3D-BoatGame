@@ -1,11 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Attach this to the Boat GameObject.
-/// Every frame it pushes the boat's world-space position, forward direction,
-/// and horizontal speed into global shader properties read by the Ocean shader.
-/// The wake is scaled to zero when the boat is stationary.
-/// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class OceanBoatInteraction : MonoBehaviour
 {

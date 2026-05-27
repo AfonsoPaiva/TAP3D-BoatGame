@@ -1,11 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-/// <summary>
-/// Physics-based boat controller.
-/// Queries OceanWaveManager for the CPU-side Gerstner surface height so that
-/// buoyancy and alignment match the GPU vertex displacement exactly.
-/// </summary>
+
 [RequireComponent(typeof(Rigidbody))]
 public class BoatController : MonoBehaviour
 {
@@ -50,7 +46,6 @@ public class BoatController : MonoBehaviour
 
     void Start()
     {
-        // Try singleton first, then scene search, then log a clear error.
         _ocean = OceanWaveManager.Instance
               ?? FindFirstObjectByType<OceanWaveManager>();
 
@@ -138,10 +133,6 @@ public class BoatController : MonoBehaviour
         float targetY = avgY;
 
         // ── Hull waterline constraint ─────────────────────────────────────
-        // For each hull probe: find the minimum pivot Y that keeps it AT or
-        // above the wave surface. Only raises the floor — never the ceiling.
-        // NOTE: only add hullPoints if they mark the actual waterline of the
-        // mesh; leave the array empty to skip this constraint entirely.
         foreach (Transform hp in hullPoints)
         {
             if (hp == null) continue;
@@ -170,11 +161,10 @@ public class BoatController : MonoBehaviour
     // Public helpers
     // -----------------------------------------------------------------------
 
-    /// <summary>Horizontal speed in m/s.</summary>
+    ///Horizontal speed in m/s.
     public float HorizontalSpeed
         => new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z).magnitude;
 
-    /// <summary>Externally trigger a wave-impact impulse (explosion, large wake, etc.).</summary>
     public void ApplyWaveImpact(Vector3 worldPoint, float forceMagnitude)
         => _rb.AddForceAtPosition(Vector3.up * forceMagnitude, worldPoint, ForceMode.Impulse);
 

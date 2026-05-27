@@ -1,20 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
-/// <summary>
-/// Attach this script to your Main Camera.
-/// Lightweight support script — passes buoy data + silhouette atlas to the radar shader.
-/// All visual calculations (sweep, fade, blip rendering) happen in the shader.
-///
-/// Setup:
-///   1. Create a Material using "Custom/RadarShader" → e.g. "RadarMaterial".
-///   2. Attach this script to the Main Camera.
-///   3. Drag RadarMaterial into the "Radar Material" slot.
-///   4. Drag the boat's Transform into the "Boat Transform" slot.
-///   5. In Project Settings → Tags & Layers, add a layer called "RadarSilhouette".
-///   6. Tag buoys as "Buoy". Do NOT change their layer — the script handles layer swapping.
-///   7. Press Play – the radar appears bottom-left with mesh silhouettes.
-/// </summary>
 [RequireComponent(typeof(Camera))]
 [DefaultExecutionOrder(100)]
 public class RadarHUD : MonoBehaviour
@@ -116,9 +102,7 @@ public class RadarHUD : MonoBehaviour
         if (blitMaterial    != null)   Destroy(blitMaterial);
     }
 
-    // ── Public API ───────────────────────────────────────────────────────
-
-    /// <summary>Call when buoys are added/removed at runtime.</summary>
+    /// Call when buoys are added/removed at runtime.</summary>
     public void RefreshBuoyList()
     {
         if (!isInitialized) return;
@@ -384,7 +368,7 @@ public class RadarHUD : MonoBehaviour
         Graphics.Blit(src, dest, radarMaterial);
     }
 
-    /// <summary>Passes parameters and buoy positions to the shader.</summary>
+    /// Passes parameters and buoy positions to the shader.</summary>
     void PassDataToShader()
     {
         radarMaterial.SetFloat(ID_SweepRPS,    sweepRPS);

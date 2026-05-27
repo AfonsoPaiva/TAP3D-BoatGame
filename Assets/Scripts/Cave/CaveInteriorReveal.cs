@@ -1,16 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Controla o shader Custom/CaveInterior na mesh interior da gruta.
-///
-/// Logica de reveal baseada em DISTANCIA 3D ao barco:
-///  - Cada fragmento da mesh so se ilumina quando o barco esta perto
-///    (dentro de _revealRadius unidades mundo).
-///  - Quando o barco sai da gruta, toda a mesh volta a escuro.
-///
-/// Coordenacao com CaveLighting (post-process):
-///  Usa a mesma flag caveManager.isInsideCave para o fade global.
-/// </summary>
 public class CaveInteriorReveal : MonoBehaviour
 {
     [Header("Referencias")]

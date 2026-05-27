@@ -1,16 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Adiciona este script à Main Camera.
-/// É ativado/desativado automaticamente pelo CaveZoneTrigger.
-///
-/// Funcionamento:
-///  - Enquanto o barco está FORA da gruta: efeito inativo (effectIntensity = 0).
-///  - Ao entrar na triggerbox: effectIntensity sobe suavemente de 0 → 1 (fade-in da escuridão total).
-///  - Dentro da gruta: gruta completamente escura exceto um halo de luz à volta do barco.
-///    O raio do halo cresce também suavemente (revelação progressiva).
-///  - Ao sair: effectIntensity volta a 0 suavemente.
-/// </summary>
 [RequireComponent(typeof(Camera))]
 public class CaveLightingManager : MonoBehaviour
 {

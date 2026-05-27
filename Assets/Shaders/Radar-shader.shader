@@ -34,7 +34,6 @@ Shader "Custom/RadarShader"
             ZTest     Always
             ZWrite    Off
             Cull      Off
-            // Blend removido: o shader já faz a composição manualmente com o _MainTex
 
             CGPROGRAM
             #pragma vertex   vert
@@ -73,8 +72,6 @@ Shader "Custom/RadarShader"
 
             float  _RadarSize;
             float  _RadarMargin;
-
-            // Buoy blips passed from C# (up to 16)
             int     _BuoyCount;
             float4  _BuoyBlips[16];
 

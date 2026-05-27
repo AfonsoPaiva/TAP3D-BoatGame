@@ -1,22 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Attach to any buoy GameObject.
-///
-/// Setup:
-///   1. Add this component to the buoy prefab/GameObject.
-///   2. In Unity's Tag Manager (Edit → Project Settings → Tags & Layers),
-///      create a tag called "Buoy" and assign it to the buoy GameObject.
-///   3. Optionally assign a HeadTransform for the top of the buoy if you
-///      want it to tilt realistically with the waves.
-///
-/// Behaviour:
-///   • The buoy stays at its XZ spawn position (no horizontal movement).
-///   • It bobs vertically with the wave surface.
-///   • It tilts (roll + pitch) to match the wave normal for realism.
-///   • It is detected by the radar via the "Buoy" tag.
-///   • Uses OceanWaveManager (CPU-side Gerstner) so it matches the shader.
-/// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class BuoyFloater : MonoBehaviour
 {

@@ -1,19 +1,3 @@
-// ============================================================
-//  CaveInterior.shader
-//  Shader trilinear para o interior da gruta com reveal
-//  baseado em DISTANCIA 3D ao barco (espaço mundo).
-//
-//  Comportamento por fragmento:
-//   - distToBoat < _RevealRadius           → textura totalmente visível
-//   - distToBoat > _RevealRadius + _Falloff → totalmente negro
-//   - entre os dois                         → transição suave
-//
-//  _RevealIntensity (0→1) controla se o efeito está activo.
-//  Quando = 0 (fora da gruta) a mesh fica com a textura normal
-//  (ou escura, dependendo de _DarkWhenInactive).
-//
-//  A mesh exterior NAO usa este shader.
-// ============================================================
 Shader "Custom/CaveInterior"
 {
     Properties
@@ -60,7 +44,7 @@ Shader "Custom/CaveInterior"
         Cull Back
         LOD 300
 
-        // Descartar fragmentos onde a mascara (cilindro) escreveu
+        // Descartar fragmentos onde a mascara escreveu
         Stencil
         {
             Ref  [_StencilRef]
@@ -125,8 +109,6 @@ Shader "Custom/CaveInterior"
             float distToBoat = distance(IN.worldPos, _BoatWorldPos.xyz);
 
             // t = 1 dentro do raio, 0 fora do raio + falloff
-            // smoothstep com borda exterior: desce de 1→0 entre
-            // _RevealRadius e _RevealRadius + _RevealFalloff
             float proximity = 1.0 - smoothstep(_RevealRadius,
                                                 _RevealRadius + _RevealFalloff,
                                                 distToBoat);
@@ -146,7 +128,7 @@ Shader "Custom/CaveInterior"
             o.Smoothness = _Smoothness;
             o.Alpha      = 1.0;
 
-            // Emissao subtil apenas na zona iluminada (coerente com o halo do CaveLighting)
+            // Emissao subtil apenas na zona iluminada fica melhor com o halo da luz 
             o.Emission = albedo * (_AmbientBoost * t);
         }
         ENDCG

@@ -24,10 +24,7 @@ Shader "Custom/TriplanarTerrain"
         LOD 200
 
         CGPROGRAM
-        // Physically based Standard lighting model, and enable shadows on all light types
         #pragma surface surf Standard fullforwardshadows
-
-        // Use shader model 3.0 target, to get nicer looking lighting
         #pragma target 3.0
 
         sampler2D _TopTex;
@@ -54,8 +51,10 @@ Shader "Custom/TriplanarTerrain"
             
             // Calcular os pesos de mistura (Blend Weights) com base na direção da normal
             float3 blendWeights = abs(worldNormal);
+
             // Aumentar a nitidez da transição
             blendWeights = pow(blendWeights, _BlendSharpness);
+
             // Normalizar para que a soma seja 1
             blendWeights /= (blendWeights.x + blendWeights.y + blendWeights.z);
 
@@ -82,7 +81,7 @@ Shader "Custom/TriplanarTerrain"
             float3 nY = UnpackNormal(normY);
             float3 nZ = UnpackNormal(normZ);
 
-            // Misturar normais (método simplificado)
+            // Misturar normais
             float3 blendedNormal = nX * blendWeights.x + nY * blendWeights.y + nZ * blendWeights.z;
 
             // Atribuir valores finais
